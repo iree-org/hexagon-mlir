@@ -403,10 +403,6 @@ class HexagonExecutor:
         ):
             LINK_DIRS += f" -L{multithreading_dir}"
             runtime_libs.append("hexagon_mlir_async_runtime")
-        # Allow both implicit (-> -lfoo) and explicit archive paths (-> /path/to/libfoo.a).
-        runtime_libs_str = " ".join(
-            [lib if lib.endswith(".a") else f"-l{lib}" for lib in runtime_libs]
-        )
         print("==> Compiling shared object file ...")
         dir, kernel_file_without_ext, _ = split_path(kernel_obj_path)
         so_name = "libTriton" if htp_kernel_gen else "lib" + kernel_file_without_ext
@@ -419,48 +415,34 @@ class HexagonExecutor:
                 lib_names_extracted,
             ) = self.validate_and_extract_lib_names(lib_dependencies_paths)
 
-        # This function returns the empty string if `htp_kernel_gen` or if it's a module containing only constants
-        # (which is tested with cpp_wrapper_path being None). Otherwise it returns its argument.
-        keep_or_skip_string = lambda arg: (
-            arg if (not htp_kernel_gen) and (cpp_wrapper_path != None) else ""
+        prof_utils_path = os.path.join(
+            self.config.env_vars["HEXAGON_MLIR_ROOT"],
+            "test", "utils", "dsp", "include", "prof_utils.cc",
+        )
+        lwp_handler_path = os.path.join(
+            self.config.env_vars["HEXAGON_MLIR_ROOT"],
+            "qcom_hexagon_backend", "bin", "runtime", "profiler", "lwp_handler.S",
         )
 
-        prof_utils_path = "{}/test/utils/dsp/include/prof_utils.cc".format(
-            self.config.env_vars["HEXAGON_MLIR_ROOT"]
-        )
-        lwp_handler_path = (
-            "{}/qcom_hexagon_backend/bin/runtime/profiler/lwp_handler.S".format(
-                self.config.env_vars["HEXAGON_MLIR_ROOT"]
-            )
-        )
-
-        command = "{} {} {} {} {} {} {} {} -shared -fPIC -G0 {} -o {}".format(
-            self.config.HEX_TOOLS["hexagon-clang++"],
-            HEX_CXX_FLAGS,
-            INCLUDES,
-            LINK_DIRS,
-            keep_or_skip_string(cpp_wrapper_path),
-            kernel_obj_path,
-            runtime_libs_str,
-            (
-                ""
-                if not self.enable_lwp
-                else "{} {}".format(prof_utils_path, lwp_handler_path)
-            ),
-            (
-                ""
-                if not lib_dependencies_paths
-                else "-L{} -l{}".format(
-                    dependencies_base_dir, " -l".join(lib_names_extracted)
-                )
-            ),
-            kernel_path,
-        )
-        print(command)
+        command = [self.config.HEX_TOOLS["hexagon-clang++"]]
+        command += HEX_CXX_FLAGS.split()
+        command += INCLUDES.split()
+        command += LINK_DIRS.split()
+        if (not htp_kernel_gen) and (cpp_wrapper_path is not None):
+            command.append(cpp_wrapper_path)
+        command.append(kernel_obj_path)
+        command += [lib if lib.endswith(".a") else f"-l{lib}" for lib in runtime_libs]
+        if self.enable_lwp:
+            command += [prof_utils_path, lwp_handler_path]
+        command += ["-shared", "-fPIC", "-G0"]
+        if lib_dependencies_paths:
+            command += [f"-L{dependencies_base_dir}"]
+            command += [f"-l{name}" for name in lib_names_extracted]
+        command += ["-o", kernel_path]
+        print(" ".join(command))
         try:
             subprocess.run(
                 command,
-                shell=True,
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.STDOUT,
