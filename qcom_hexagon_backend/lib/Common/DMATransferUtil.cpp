@@ -94,9 +94,11 @@ bool createDMAStartOp(Location loc, IRRewriter &rewriter, Value source,
     return true;
   }
 
-  int64_t stride, width;
-  assert(isStridedMultiDimMemrefType(sourceMemRefType, stride, width) ||
-         isStridedMultiDimMemrefType(targetMemRefType, stride, width));
+  int64_t stride = 0;
+  int64_t width = 0;
+  if (!isStridedMultiDimMemrefType(sourceMemRefType, stride, width) &&
+      !isStridedMultiDimMemrefType(targetMemRefType, stride, width))
+    return false;
   memref::DmaStartOp::create(rewriter, loc, source, zeroIndices, target,
                              zeroIndices, numElements, tagAlloc, zeroIndex,
                              getI32Const(loc, rewriter, stride),
