@@ -154,9 +154,12 @@ struct LowerAttentionOp : public OpRewritePattern<AttentionOp> {
     DBG("Scaled QK^T: " << qkTScaled);
 
     // Apply mask to scaled QK^T
-    Value qkTMasked = linalg::AddOp::create(
-                          rewriter, loc, ValueRange{qkTScaled, mask}, qkTempty)
-                          .getResult(0);
+    Value qkTMasked =
+        linalg::ElementwiseOp::create(rewriter, loc,
+                                      ValueRange{qkTScaled, mask},
+                                      ValueRange{qkTempty},
+                                      linalg::ElementwiseKind::add)
+            .getResult(0);
     DBG("Masked QK^T: " << qkTMasked);
 
     // - Softmax -
@@ -192,7 +195,10 @@ struct LowerAttentionOp : public OpRewritePattern<AttentionOp> {
             })
             .getResult(0);
     Value qkTStable =
-        linalg::ExpOp::create(rewriter, loc, qkTSub, qkTempty).getResult(0);
+        linalg::ElementwiseOp::create(rewriter, loc, ValueRange{qkTSub},
+                                      ValueRange{qkTempty},
+                                      linalg::ElementwiseKind::exp)
+            .getResult(0);
 
     // Step 3: Compute `sum(exp(xi-max))` along the last dimension
     Value sumInit =

@@ -45,18 +45,31 @@ using namespace hexagon;
 
 namespace {
 
+// Match the indexing maps of the retired batch_matmul_transpose_b operation.
+static bool isBatchMatmulTransposeB(linalg::LinalgOp op) {
+  if (!isa<linalg::BatchMatmulOp>(op.getOperation()))
+    return false;
+  AffineExpr b, m, n, k;
+  bindDims(op.getContext(), b, m, n, k);
+  SmallVector<AffineMap> maps = {
+      AffineMap::get(4, 0, {b, m, k}, op.getContext()),
+      AffineMap::get(4, 0, {b, n, k}, op.getContext()),
+      AffineMap::get(4, 0, {b, m, n}, op.getContext())};
+  return op.getIndexingMapsArray() == maps;
+}
+
 struct LinalgGeneralizePass
     : public ::impl::LinalgGeneralizeBase<LinalgGeneralizePass> {
   void runOnOperation() override;
-  FailureOr<linalg::GenericOp> GeneralizeOp(IRRewriter &rewriter,
-                                            linalg::LinalgOp linalgOp);
+  FailureOr<linalg::LinalgOp> GeneralizeOp(IRRewriter &rewriter,
+                                           linalg::LinalgOp linalgOp);
 };
 
-FailureOr<linalg::GenericOp>
+FailureOr<linalg::LinalgOp>
 LinalgGeneralizePass::GeneralizeOp(IRRewriter &rewriter,
                                    linalg::LinalgOp linalgOp) {
   rewriter.setInsertionPoint(linalgOp);
-  FailureOr<linalg::GenericOp> generalizedOp =
+  FailureOr<linalg::LinalgOp> generalizedOp =
       linalg::generalizeNamedOp(rewriter, linalgOp);
   return generalizedOp;
 }
@@ -74,7 +87,7 @@ void LinalgGeneralizePass::runOnOperation() {
 
   IRRewriter rewriter(&getContext());
   for (auto linalgOp : matmulOps) {
-    FailureOr<linalg::GenericOp> generalizedOp =
+    FailureOr<linalg::LinalgOp> generalizedOp =
         GeneralizeOp(rewriter, linalgOp);
     if (failed(generalizedOp)) {
       linalgOp->emitOpError("failed to generalize linalg named op");
@@ -85,21 +98,16 @@ void LinalgGeneralizePass::runOnOperation() {
   SmallVector<linalg::LinalgOp> namedOps;
   // Collect all linalg named ops
   funcOp.walk([&](linalg::LinalgOp linalgOp) {
-    if (isa_and_nonnull<
-            linalg::AbsOp, linalg::AddOp, linalg::BroadcastOp, linalg::CeilOp,
-            linalg::CopyOp, linalg::DivOp, linalg::DivUnsignedOp,
-            linalg::ElementwiseOp, linalg::ExpOp, linalg::FloorOp,
-            linalg::LogOp, linalg::MapOp, linalg::MaxOp, linalg::MulOp,
-            linalg::NegFOp, linalg::ReduceOp, linalg::MatmulTransposeBOp,
-            linalg::BatchMatmulTransposeBOp,
-            // Fix for Flash-Attention : Don't generalize transpose
-            linalg::TransposeOp, linalg::SubOp>(linalgOp.getOperation())) {
+    if (isa_and_nonnull<linalg::BroadcastOp, linalg::CopyOp,
+                        linalg::ElementwiseOp, linalg::MapOp, linalg::ReduceOp,
+                        linalg::TransposeOp>(linalgOp.getOperation()) ||
+        isBatchMatmulTransposeB(linalgOp)) {
       namedOps.push_back(linalgOp);
     }
   });
 
   for (auto linalgOp : namedOps) {
-    FailureOr<linalg::GenericOp> generalizedOp =
+    FailureOr<linalg::LinalgOp> generalizedOp =
         GeneralizeOp(rewriter, linalgOp);
     if (failed(generalizedOp)) {
       linalgOp->emitOpError("failed to generalize linalg named op");
