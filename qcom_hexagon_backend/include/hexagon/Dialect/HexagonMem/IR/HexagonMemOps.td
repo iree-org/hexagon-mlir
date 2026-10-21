@@ -13,7 +13,6 @@
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Interfaces/DestinationStyleOpInterface.td"
 include "mlir/IR/CommonTypeConstraints.td"
-include "mlir/Interfaces/CopyOpInterface.td"
 include "hexagon/Dialect/HexagonMem/IR/HexagonMemDialect.td"
 include "hexagon/Dialect/HexagonMem/IR/HexagonMemTypes.td"
 
@@ -66,7 +65,7 @@ def HexagonMem_AllocOp : HexagonMem_Op<"alloc"> {
 // CopyOp
 //===----------------------------------------------------------------------===//
 
-def HexagonMem_CopyOp : HexagonMem_Op<"copy", [CopyOpInterface, SameOperandsElementType,
+def HexagonMem_CopyOp : HexagonMem_Op<"copy", [SameOperandsElementType,
     SameOperandsShape]> {
 
   let description = [{
