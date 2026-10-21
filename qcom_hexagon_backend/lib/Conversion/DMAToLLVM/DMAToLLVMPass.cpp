@@ -156,10 +156,9 @@ LowerDMAStart::matchAndRewrite(memref::DmaStartOp op, OpAdaptor adaptor,
   };
 
   // Get the LLVM pointer to the memory reference
-  auto getMemRefPtr = [this, loc,
-                       context](Value memref, int rank, signed offset,
-                                OpAdaptor adaptor,
-                                ConversionPatternRewriter &rewriter) {
+  auto getMemRefPtr = [this, loc](Value memref, int rank, signed offset,
+                                  OpAdaptor adaptor,
+                                  ConversionPatternRewriter &rewriter) {
     auto memrefType = cast<MemRefType>(memref.getType());
     auto llvmMemref = *(adaptor.getOperands().begin() + offset);
     ValueRange indices = {

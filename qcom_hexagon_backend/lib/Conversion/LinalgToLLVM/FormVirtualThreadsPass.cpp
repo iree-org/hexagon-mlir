@@ -95,7 +95,7 @@ bool rewriteForTLP(IRRewriter &rewriter, linalg::GenericOp op,
 
   // To begin with, `no-interchange`, single thread.
   SmallVector<int64_t> threadSizes(op.getNumLoops(), 0);
-  std::vector<long int> interchangeVector(op.getNumLoops(), 0);
+  std::vector<int64_t> interchangeVector(op.getNumLoops(), 0);
   std::iota(interchangeVector.begin(), interchangeVector.end(), 0);
 
   // utility to make parallel-loop at `loopIndex` the threading loop
