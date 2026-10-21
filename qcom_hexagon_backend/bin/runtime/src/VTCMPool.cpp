@@ -59,8 +59,11 @@ VtcmPool::~VtcmPool() {
   HEXAGON_SAFE_CALL(HAP_compute_res_release(contextId_));
 }
 
-void *VtcmPool::Allocate(size_t nbytes) {
-  CHECK((!free_.empty()), "No free VTCM");
+// Fork divergence note
+void *VtcmPool::TryAllocate(size_t nbytes) {
+  if (free_.empty()) {
+    return nullptr;
+  }
   CHECK((nbytes >= 0x80),
         "Minimum VTCM alloation must be 128 bytes - nbytes " << nbytes);
 
@@ -68,8 +71,9 @@ void *VtcmPool::Allocate(size_t nbytes) {
   if (nbytes & size_t(0x7FF)) {
     auto lastFreeEntry = free_.end();
     lastFreeEntry--;
-    CHECK((lastFreeEntry->second >= nbytes),
-          "Not enough contiguous VTCM space at the end to allocate");
+    if (lastFreeEntry->second < nbytes) {
+      return nullptr;
+    }
     char *ptr = lastFreeEntry->first + (lastFreeEntry->second - nbytes);
     allocations_.emplace_back(std::pair<char *, size_t>(ptr, nbytes));
     lastFreeEntry->second -= nbytes;
@@ -90,8 +94,9 @@ void *VtcmPool::Allocate(size_t nbytes) {
       }
     }
   }
-  CHECK((entryToAllocate->second >= nbytes),
-        "Not enough contiguous VTCM space to allocate");
+  if (entryToAllocate->second < nbytes) {
+    return nullptr;
+  }
   char *ptr = entryToAllocate->first;
   allocations_.emplace(allocations_.end(),
                        std::pair<char *, size_t>(ptr, nbytes));
@@ -102,6 +107,13 @@ void *VtcmPool::Allocate(size_t nbytes) {
     entryToAllocate->first = entryToAllocate->first + nbytes;
     entryToAllocate->second = entryToAllocate->second - nbytes;
   }
+  return ptr;
+}
+
+// Fork divergence note
+void *VtcmPool::Allocate(size_t nbytes) {
+  void *ptr = TryAllocate(nbytes);
+  CHECK((ptr != nullptr), "Not enough contiguous VTCM space to allocate");
   return ptr;
 }
 
