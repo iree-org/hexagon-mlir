@@ -84,15 +84,15 @@ static Value computeAllocationSize(MemRefType type,
 
   // Compute number of elements.
   Value numElements = rewriter.create<LLVM::ConstantOp>(
-      loc, indexType, rewriter.getIndexAttr(1));
+      loc, indexType, 1);
   for (int pos = 0; pos < type.getRank(); ++pos) {
     auto size = desc.size(rewriter, loc, pos);
     numElements = rewriter.create<LLVM::MulOp>(loc, numElements, size);
   }
   Value totalSize = rewriter.create<LLVM::MulOp>(loc, numElements, sizeInBytes);
-  Value sizeI32 =
-      rewriter.create<LLVM::TruncOp>(loc, rewriter.getI32Type(), totalSize);
-  return sizeI32;
+  if (totalSize.getType() == rewriter.getI32Type())
+    return totalSize;
+  return rewriter.create<LLVM::TruncOp>(loc, rewriter.getI32Type(), totalSize);
 }
 
 /// Runtime call prototype for memref type:
@@ -158,11 +158,10 @@ struct LowerAlloc : public ConvertOpToLLVMPattern<hexagonmem::AllocOp> {
       return success();
     }
 
-    Value alignmentValue;
-    auto alignmentAttr = op.getAlignment();
-    Type indexType = getIndexType();
-    alignmentValue =
-        createIndexAttrConstant(rewriter, loc, indexType, alignmentAttr);
+    // The runtime takes the alignment as a uint64_t, independently of the
+    // target's index bitwidth.
+    Value alignmentValue = createIndexAttrConstant(
+        rewriter, loc, rewriter.getI64Type(), op.getAlignment());
 
     auto allocFnName = getAllocFnName();
     FailureOr<LLVM::LLVMFuncOp> funcOp = getAllocFn(
@@ -186,8 +185,10 @@ struct LowerAlloc : public ConvertOpToLLVMPattern<hexagonmem::AllocOp> {
     this->getMemRefDescriptorSizes(loc, memRefType, adaptor.getOperands(),
                                    rewriter, sizes, strides, size,
                                    /* sizeInBytes */ true);
-    sizeAsI32 =
-        rewriter.create<LLVM::TruncOp>(loc, rewriter.getIntegerType(32), size);
+    sizeAsI32 = size.getType() == rewriter.getI32Type()
+                    ? size
+                    : rewriter.create<LLVM::TruncOp>(
+                          loc, rewriter.getI32Type(), size);
     mlir::LLVM::CallOp callOp = rewriter.create<LLVM::CallOp>(
         loc, funcOp.value(),
         ValueRange({sizeAsI32, alignmentValue, isInVtcmValue}));
@@ -294,8 +295,7 @@ struct LowerCopy : public ConvertOpToLLVMPattern<hexagonmem::CopyOp> {
                          : adaptor.getTarget();
 
     // Now promote the unranked descriptors to the stack.
-    auto one = rewriter.create<LLVM::ConstantOp>(loc, getIndexType(),
-                                                 rewriter.getIndexAttr(1));
+    auto one = rewriter.create<LLVM::ConstantOp>(loc, getIndexType(), 1);
     auto promote = [&](Value desc) {
       auto ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
       auto allocated =
