@@ -19,15 +19,15 @@ int hexkl_matmul_f16f16_f32(uint64_t n_row, uint64_t n_col, uint64_t n_inner,
   int ret = AEE_SUCCESS;
   const size_t vtcm_size =
       hexkl_matmul_f16f16_f32_scratch_bytes(n_row, n_col, n_inner);
-  void *vtcm_scratch =
-      hexagon_runtime_alloc_1d(vtcm_size, HEXKL_HMX_ACTIVATION_ALIGNMENT, true);
+  void *vtcm_scratch = hexagon_runtime_alloc_1d_dsp(
+      vtcm_size, HEXKL_HMX_ACTIVATION_ALIGNMENT, true);
   if (!vtcm_scratch) {
     printf("[HEXKL_MICRO][ERROR] VTCM allocation failed\n");
     return AEE_ENOMEMORY;
   }
   ret = hexkl_matmul_f16f16_f32_with_scratch(n_row, n_col, n_inner, outM, inAct,
                                              inW, vtcm_scratch);
-  hexagon_runtime_free_1d(vtcm_scratch);
+  hexagon_runtime_free_1d_dsp(vtcm_scratch);
   return ret;
 }
 

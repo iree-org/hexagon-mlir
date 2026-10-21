@@ -17,18 +17,20 @@ TEST(HexagonCAPItest, test_flow) {
   int64_t shape2d[2]{256, 256};
   size_t alignment{128};
   size_t alignment_2d{2048};
-  void *buf1 = hexagon_runtime_alloc_1d(bytes, alignment, false /* isVtcm */);
-  void *buf2 = hexagon_runtime_alloc_1d(bytes, alignment, true /* isVtcm */);
-  void *croutonBuf1 = hexagon_runtime_build_crouton(buf1, bytes);
-  void *origBuf1 = hexagon_runtime_get_contiguous_memref(croutonBuf1);
+  void *buf1 =
+      hexagon_runtime_alloc_1d_dsp(bytes, alignment, false /* isVtcm */);
+  void *buf2 =
+      hexagon_runtime_alloc_1d_dsp(bytes, alignment, true /* isVtcm */);
+  void *croutonBuf1 = hexagon_runtime_build_crouton_dsp(buf1, bytes);
+  void *origBuf1 = hexagon_runtime_get_contiguous_memref_dsp(croutonBuf1);
   EXPECT_EQ(origBuf1, buf1);
-  hexagon_runtime_free_1d(buf1);
-  hexagon_runtime_free_1d(buf2);
-  buf1 = hexagon_runtime_alloc_2d(shape2d[0], bytes, alignment_2d,
-                                  false /* isVtcm */);
-  buf2 = hexagon_runtime_alloc_2d(shape2d[0], bytes, alignment_2d,
-                                  true /* isVtcm */);
-  hexagon_runtime_free_2d(buf1);
-  hexagon_runtime_free_2d(buf2);
+  hexagon_runtime_free_1d_dsp(buf1);
+  hexagon_runtime_free_1d_dsp(buf2);
+  buf1 = hexagon_runtime_alloc_2d_dsp(shape2d[0], bytes, alignment_2d,
+                                      false /* isVtcm */);
+  buf2 = hexagon_runtime_alloc_2d_dsp(shape2d[0], bytes, alignment_2d,
+                                      true /* isVtcm */);
+  hexagon_runtime_free_2d_dsp(buf1);
+  hexagon_runtime_free_2d_dsp(buf2);
   DeallocateHexagonResources();
 }
