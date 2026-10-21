@@ -63,6 +63,8 @@ static Value truncToI32(ConversionPatternRewriter &rewriter, Location loc,
   // Ensure the value is of an integer type
   assert(llvm::isa<IntegerType>(val.getType()) && "Expected an integer type");
   MLIRContext *context = rewriter.getContext();
+  if (val.getType() == rewriter.getI32Type())
+    return val;
   // Create and return a truncation operation to i32 type
   return LLVM::TruncOp::create(rewriter, loc, rewriter.getI32Type(), val);
 }
@@ -115,6 +117,8 @@ Value convertToI32Type(mlir::Location loc, Value value,
   // Get the type of the value
   mlir::Type type = value.getType();
   assert(mlir::LLVM::isCompatibleType(type));
+  if (type == rewriter.getI32Type())
+    return value;
   return LLVM::TruncOp::create(rewriter, loc, rewriter.getI32Type(), value);
 }
 

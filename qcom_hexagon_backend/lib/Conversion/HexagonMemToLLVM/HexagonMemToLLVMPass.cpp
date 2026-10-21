@@ -93,17 +93,16 @@ static Value computeAllocationSize(MemRefType type,
   }
 
   // Compute number of elements.
-  Value numElements = LLVM::ConstantOp::create(rewriter, loc, indexType,
-                                               rewriter.getIndexAttr(1));
+  Value numElements = LLVM::ConstantOp::create(rewriter, loc, indexType, 1);
   for (int pos = 0; pos < type.getRank(); ++pos) {
     auto size = desc.size(rewriter, loc, pos);
     numElements = LLVM::MulOp::create(rewriter, loc, numElements, size);
   }
   Value totalSize =
       LLVM::MulOp::create(rewriter, loc, numElements, sizeInBytes);
-  Value sizeI32 =
-      LLVM::TruncOp::create(rewriter, loc, rewriter.getI32Type(), totalSize);
-  return sizeI32;
+  if (totalSize.getType() == rewriter.getI32Type())
+    return totalSize;
+  return LLVM::TruncOp::create(rewriter, loc, rewriter.getI32Type(), totalSize);
 }
 
 /// the 2 runtime call prototypes are :
@@ -218,11 +217,10 @@ public:
       return success();
     }
 
-    Value alignmentValue;
-    auto alignmentAttr = op.getAlignment();
-    Type indexType = getIndexType();
-    alignmentValue =
-        createIndexAttrConstant(rewriter, loc, indexType, alignmentAttr);
+    // The runtime takes the alignment as a uint64_t, independently of the
+    // target's index bitwidth.
+    Value alignmentValue = createIndexAttrConstant(
+        rewriter, loc, rewriter.getI64Type(), op.getAlignment());
 
     auto allocFnName = getAllocFnName(isCroutonType, deviceType);
     FailureOr<LLVM::LLVMFuncOp> funcOp =
@@ -257,8 +255,10 @@ public:
       this->getMemRefDescriptorSizes(loc, memRefType, adaptor.getOperands(),
                                      rewriter, sizes, strides, size,
                                      /* sizeInBytes */ true);
-      sizeAsI32 = LLVM::TruncOp::create(rewriter, loc,
-                                        rewriter.getIntegerType(32), size);
+      sizeAsI32 = size.getType() == rewriter.getI32Type()
+                      ? size
+                      : LLVM::TruncOp::create(rewriter, loc,
+                                              rewriter.getI32Type(), size);
       mlir::LLVM::CallOp callOp = LLVM::CallOp::create(
           rewriter, loc, funcOp.value(),
           ValueRange({sizeAsI32, alignmentValue, isInVtcmValue}));
@@ -386,8 +386,7 @@ public:
                          : adaptor.getTarget();
 
     // Now promote the unranked descriptors to the stack.
-    auto one = LLVM::ConstantOp::create(rewriter, loc, getIndexType(),
-                                        rewriter.getIndexAttr(1));
+    auto one = LLVM::ConstantOp::create(rewriter, loc, getIndexType(), 1);
     auto promote = [&](Value desc) {
       auto ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
       auto allocated =
