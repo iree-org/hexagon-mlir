@@ -32,7 +32,7 @@
 using namespace mlir;
 using namespace hexagon;
 
-#define GEN_PASS_CLASSES
+#define GEN_PASS_DEF_HEXAGONLLVMENABLEHEXAGONROUTINES
 #include "hexagon/Transforms/Passes.h.inc"
 
 namespace {
@@ -445,7 +445,7 @@ void populateEnableHexagonRoutinesPattern(RewritePatternSet &patterns) {
 }
 
 struct HexagonLLVMEnableHexagonRoutinesPass
-    : public HexagonLLVMEnableHexagonRoutinesBase<
+    : public ::impl::HexagonLLVMEnableHexagonRoutinesBase<
           HexagonLLVMEnableHexagonRoutinesPass> {
 public:
   void runOnOperation() override {

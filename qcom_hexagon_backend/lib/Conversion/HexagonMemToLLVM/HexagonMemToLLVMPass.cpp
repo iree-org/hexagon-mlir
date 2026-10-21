@@ -49,7 +49,7 @@
 using namespace mlir;
 using namespace mlir::hexagonmem;
 
-#define GEN_PASS_CLASSES
+#define GEN_PASS_DEF_HEXAGONMEMTOLLVM
 #include "hexagon/Conversion/HexagonMemToLLVM/Passes.h.inc"
 
 namespace {
@@ -405,13 +405,14 @@ struct LowerCopy : public ConvertOpToLLVMPattern<hexagonmem::CopyOp> {
 // Setup the Lowering Pass and patterns
 //===----------------------------------------------------------------------===//
 
-void populateHexagonMemToLLVMConversionPatterns(LLVMTypeConverter &converter,
-                                                RewritePatternSet &patterns) {
-  patterns.add<LowerAlloc, LowerDealloc, LowerCopy>(converter);
+void populateHexagonMemToLLVMConversionPatternsImpl(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns) {
+  patterns.addWithLabel<LowerAlloc, LowerDealloc, LowerCopy>(
+      {"hexagon-mem-to-llvm"}, converter);
 }
 
 struct HexagonMemToLLVMPass
-    : public HexagonMemToLLVMBase<HexagonMemToLLVMPass> {
+    : public ::impl::HexagonMemToLLVMBase<HexagonMemToLLVMPass> {
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
@@ -434,7 +435,8 @@ struct HexagonMemToLLVMPass
     target.addIllegalDialect<HexagonMemDialect>();
 
     hexagon::addTypeConversions(context, typeConverter);
-    populateHexagonMemToLLVMConversionPatterns(typeConverter, patterns);
+    hexagonmem::populateHexagonMemToLLVMConversionPatterns(typeConverter,
+                                                           patterns);
 
     if (failed(applyPartialConversion(moduleOp, target, std::move(patterns))))
       signalPassFailure();
@@ -457,11 +459,17 @@ struct HexagonMemToLLVMDialectInterface : public ConvertToLLVMPatternInterface {
       ConversionTarget &target, LLVMTypeConverter &typeConverter,
       RewritePatternSet &patterns) const final {
     hexagon::addTypeConversions(getContext(), typeConverter);
-    populateHexagonMemToLLVMConversionPatterns(typeConverter, patterns);
+    hexagonmem::populateHexagonMemToLLVMConversionPatterns(typeConverter,
+                                                           patterns);
   }
 };
 
 } // namespace
+
+void mlir::hexagonmem::populateHexagonMemToLLVMConversionPatterns(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns) {
+  populateHexagonMemToLLVMConversionPatternsImpl(converter, patterns);
+}
 
 void mlir::hexagonmem::registerConvertHexagonMemToLLVMInterface(
     DialectRegistry &registry) {

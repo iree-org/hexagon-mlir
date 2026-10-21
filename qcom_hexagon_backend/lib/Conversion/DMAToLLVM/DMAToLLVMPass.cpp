@@ -12,8 +12,10 @@
 
 #include "hexagon/Common/Common.h"
 #include "hexagon/Conversion/DMAToLLVM/DMAExternalFnNames.h"
+#include "hexagon/Conversion/DMAToLLVM/DMAToLLVM.h"
 #include "hexagon/Conversion/DMAToLLVM/Passes.h"
 #include "hexagon/Dialect/HexagonMem/IR/HexagonMemDialect.h"
+#include "mlir/Analysis/DataLayoutAnalysis.h"
 #include "mlir/Conversion/LLVMCommon/ConversionTarget.h"
 #include "mlir/Conversion/LLVMCommon/Pattern.h"
 #include "mlir/Dialect/LLVMIR/FunctionCallUtils.h"
@@ -31,7 +33,7 @@ using namespace mlir;
 using namespace hexagon;
 using namespace mlir::hexagonmem;
 
-#define GEN_PASS_CLASSES
+#define GEN_PASS_DEF_DMATOLLVM
 #include "hexagon/Conversion/DMAToLLVM/Passes.h.inc"
 
 namespace {
@@ -346,12 +348,13 @@ LowerDMAWait::matchAndRewrite(memref::DmaWaitOp op, OpAdaptor adaptor,
 // Setup the Lowering Pass and patterns
 //===----------------------------------------------------------------------===//
 
-void populateDMAToLLVMConversionPatterns(LLVMTypeConverter &converter,
-                                         RewritePatternSet &patterns) {
-  patterns.add<LowerDMAStart, LowerDMAWait>(converter);
+void populateDMAToLLVMConversionPatternsImpl(LLVMTypeConverter &converter,
+                                             RewritePatternSet &patterns) {
+  patterns.addWithLabel<LowerDMAStart, LowerDMAWait>({"hexagon-dma-to-llvm"},
+                                                     converter);
 }
 
-struct DMAToLLVMPass : public DMAToLLVMBase<DMAToLLVMPass> {
+struct DMAToLLVMPass : public ::impl::DMAToLLVMBase<DMAToLLVMPass> {
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
@@ -368,7 +371,7 @@ struct DMAToLLVMPass : public DMAToLLVMBase<DMAToLLVMPass> {
     LLVMTypeConverter typeConverter(context, options);
 
     hexagon::addTypeConversions(context, typeConverter);
-    populateDMAToLLVMConversionPatterns(typeConverter, patterns);
+    hexagon::populateDMAToLLVMConversionPatterns(typeConverter, patterns);
 
     if (failed(applyPartialConversion(moduleOp, target, std::move(patterns))))
       signalPassFailure();
@@ -376,6 +379,11 @@ struct DMAToLLVMPass : public DMAToLLVMBase<DMAToLLVMPass> {
 };
 
 } // namespace
+
+void mlir::hexagon::populateDMAToLLVMConversionPatterns(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns) {
+  populateDMAToLLVMConversionPatternsImpl(converter, patterns);
+}
 
 std::unique_ptr<OperationPass<ModuleOp>> hexagon::createDMAToLLVMPass() {
   return std::make_unique<DMAToLLVMPass>();

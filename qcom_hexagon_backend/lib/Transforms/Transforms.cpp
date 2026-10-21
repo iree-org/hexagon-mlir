@@ -27,5 +27,5 @@
 using namespace mlir;
 using namespace hexagon;
 
-#define GEN_PASS_CLASSES
+#define GEN_PASS_REGISTRATION
 #include "hexagon/Transforms/Passes.h.inc"
