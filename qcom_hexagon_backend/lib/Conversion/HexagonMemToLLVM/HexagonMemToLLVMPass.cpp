@@ -443,7 +443,10 @@ struct HexagonMemToLLVMPass
 
 /// Implement the interface to convert HexagonMem to LLVM.
 struct HexagonMemToLLVMDialectInterface : public ConvertToLLVMPatternInterface {
-  using ConvertToLLVMPatternInterface::ConvertToLLVMPatternInterface;
+  // The base constructor is now protected; provide an explicit public one that
+  // forwards to it (matches the in-tree pattern, e.g. IndexToLLVM).
+  HexagonMemToLLVMDialectInterface(Dialect *dialect)
+      : ConvertToLLVMPatternInterface(dialect) {}
   void loadDependentDialects(MLIRContext *context) const final {
     context->loadDialect<LLVM::LLVMDialect>();
   }
