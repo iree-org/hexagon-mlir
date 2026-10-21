@@ -21,9 +21,12 @@ constexpr uint64_t PRIME64_2 = 14029467366897019727ULL;
 constexpr uint64_t PRIME64_3 = 1609587929392839161ULL;
 constexpr uint64_t PRIME64_5 = 2870177450012600261ULL;
 
-uint64_t xxh3_64bits(ArrayRef<uint8_t> data) {
-  const uint8_t *input = data.data();
-  size_t length = data.size();
+// The ArrayRef/StringRef xxh3_64bits overloads are now inline wrappers in
+// llvm/ADT/{ArrayRef,StringRef}.h that forward here, so this freestanding
+// definition must provide the core (const uint8_t *, size_t) signature.
+uint64_t xxh3_64bits(const uint8_t *data, size_t len) {
+  const uint8_t *input = data;
+  size_t length = len;
   uint64_t hash = length;
 
   if (length >= 32) {
