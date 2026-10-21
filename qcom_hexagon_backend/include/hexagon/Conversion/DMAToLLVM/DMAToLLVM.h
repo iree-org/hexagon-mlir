@@ -15,12 +15,21 @@
 #include "mlir/Pass/Pass.h"
 
 namespace mlir {
+class LLVMTypeConverter;
+class RewritePatternSet;
+
 namespace hexagon {
 
 #define GEN_PASS_DECL
 #include "hexagon/Conversion/DMAToLLVM/Passes.h.inc"
 
 std::unique_ptr<OperationPass<ModuleOp>> createDMAToLLVMPass();
+
+/// Populates the DMA-to-LLVM patterns into a caller-owned conversion.
+/// The caller is responsible for configuring the conversion target and type
+/// converter, including Hexagon address-space conversions.
+void populateDMAToLLVMConversionPatterns(LLVMTypeConverter &converter,
+                                         RewritePatternSet &patterns);
 
 } // namespace hexagon
 } // namespace mlir

@@ -714,23 +714,23 @@ struct LowerCopyF16ToF32Submatrix
 // Setup the Lowering Pass and patterns
 //===----------------------------------------------------------------------===//
 
-void populateHexKLToLLVMConversionPatterns(LLVMTypeConverter &converter,
-                                           RewritePatternSet &patterns) {
+void populateHexKLToLLVMConversionPatternsImpl(LLVMTypeConverter &converter,
+                                               RewritePatternSet &patterns) {
   // Keep existing matmul lowering.
-  patterns.add<LowerMatmul>(converter);
+  patterns.addWithLabel<LowerMatmul>({"hexkl-to-llvm"}, converter);
 
   // Lower macro ops to externs.
-  patterns
-      .add<LowerMacroInitialize, LowerMacroFinalize, LowerMacroLockHmx,
-           LowerMacroUnlockHmx, LowerMacroRmToAhF16Inplace,
-           LowerMacroAhToRmF16Inplace, LowerMacroMmF16, LowerQurtMemCacheClean>(
-          converter);
+  patterns.addWithLabel<LowerMacroInitialize, LowerMacroFinalize,
+                        LowerMacroLockHmx, LowerMacroUnlockHmx,
+                        LowerMacroRmToAhF16Inplace, LowerMacroAhToRmF16Inplace,
+                        LowerMacroMmF16, LowerQurtMemCacheClean>(
+      {"hexkl-to-llvm"}, converter);
 
   // Lower micro ops to externs.
-  patterns.add<LowerSetupAccReadF16, LowerAccClearF16, LowerAccReadF16,
-               LowerCopySubmatrixToF16, LowerRmToAhF16, LowerRmToWhF16,
-               LowerMmF16, LowerAhToRmF16, LowerCopyF16ToF32Submatrix>(
-      converter);
+  patterns.addWithLabel<LowerSetupAccReadF16, LowerAccClearF16, LowerAccReadF16,
+                        LowerCopySubmatrixToF16, LowerRmToAhF16, LowerRmToWhF16,
+                        LowerMmF16, LowerAhToRmF16, LowerCopyF16ToF32Submatrix>(
+      {"hexkl-to-llvm"}, converter);
 }
 
 struct HexKLToLLVMPass : public ::impl::HexKLToLLVMBase<HexKLToLLVMPass> {
@@ -755,13 +755,18 @@ struct HexKLToLLVMPass : public ::impl::HexKLToLLVMBase<HexKLToLLVMPass> {
     target.addIllegalDialect<HexKLDialect>();
 
     hexagon::addTypeConversions(context, typeConverter);
-    populateHexKLToLLVMConversionPatterns(typeConverter, patterns);
+    hexkl::populateHexKLToLLVMConversionPatterns(typeConverter, patterns);
 
     if (failed(applyPartialConversion(moduleOp, target, std::move(patterns))))
       signalPassFailure();
   }
 };
 } // namespace
+
+void mlir::hexkl::populateHexKLToLLVMConversionPatterns(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns) {
+  populateHexKLToLLVMConversionPatternsImpl(converter, patterns);
+}
 
 std::unique_ptr<OperationPass<ModuleOp>> hexkl::createHexKLToLLVMPass() {
   return std::make_unique<HexKLToLLVMPass>();

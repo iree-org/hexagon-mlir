@@ -654,14 +654,12 @@ public:
 // Setup the Lowering Pass and patterns
 //===----------------------------------------------------------------------===//
 
-void populateHexagonMemToLLVMConversionPatterns(LLVMTypeConverter &converter,
-                                                RewritePatternSet &patterns,
-                                                const std::string &deviceType) {
-  patterns.add<LowerAlloc>(converter, deviceType);
-  patterns.add<LowerDealloc>(converter, deviceType);
-  patterns.add<LowerCopy>(converter, deviceType);
-  patterns.add<LowerMemrefToCrouton>(converter, deviceType);
-  patterns.add<LowerCroutonToMemref>(converter, deviceType);
+void populateHexagonMemToLLVMConversionPatternsImpl(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns,
+    const std::string &deviceType) {
+  patterns.addWithLabel<LowerAlloc, LowerDealloc, LowerCopy,
+                        LowerMemrefToCrouton, LowerCroutonToMemref>(
+      {"hexagon-mem-to-llvm"}, converter, deviceType);
 }
 
 struct HexagonMemToLLVMPass
@@ -691,8 +689,8 @@ struct HexagonMemToLLVMPass
     target.addIllegalDialect<HexagonMemDialect>();
 
     hexagon::addTypeConversions(context, typeConverter);
-    populateHexagonMemToLLVMConversionPatterns(typeConverter, patterns,
-                                               device_type);
+    hexagonmem::populateHexagonMemToLLVMConversionPatterns(
+        typeConverter, patterns, device_type);
 
     if (failed(applyPartialConversion(moduleOp, target, std::move(patterns))))
       signalPassFailure();
@@ -714,12 +712,19 @@ struct HexagonMemToLLVMDialectInterface : public ConvertToLLVMPatternInterface {
       ConversionTarget &target, LLVMTypeConverter &typeConverter,
       RewritePatternSet &patterns) const final {
     hexagon::addTypeConversions(getContext(), typeConverter);
-    populateHexagonMemToLLVMConversionPatterns(typeConverter, patterns,
-                                               "hexagon");
+    hexagonmem::populateHexagonMemToLLVMConversionPatterns(
+        typeConverter, patterns, "hexagon");
   }
 };
 
 } // namespace
+
+void mlir::hexagonmem::populateHexagonMemToLLVMConversionPatterns(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns,
+    const std::string &deviceType) {
+  populateHexagonMemToLLVMConversionPatternsImpl(converter, patterns,
+                                                 deviceType);
+}
 
 void mlir::hexagonmem::registerConvertHexagonMemToLLVMInterface(
     DialectRegistry &registry) {
