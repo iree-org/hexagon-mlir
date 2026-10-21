@@ -63,7 +63,7 @@ def HexagonMem_AllocOp : HexagonMem_Op<"alloc"> {
   let results = (outs Res<AnyMemRefOrCroutonType, "",
                           [MemAlloc<DefaultResource, 0, FullEffect>]>:$buffer);
 
-  let assemblyFormat = "`(`$dynamicSizes`)` attr-dict `:` qualified(type($buffer))";
+  let assemblyFormat = "`(`$dynamicSizes`)` prop-dict attr-dict `:` qualified(type($buffer))";
 
   let hasVerifier = 1;
 }
@@ -167,7 +167,7 @@ def HexagonMem_ConvertLayoutOp : HexagonMem_Op<"convert_layout"> {
 
   let assemblyFormat = [{
     `ins` `(` $source `:` type($source)`)` `,`
-      `outs` `(` $target `:` type($target)`)` attr-dict
+      `outs` `(` $target `:` type($target)`)` prop-dict attr-dict
   }];
 
   // TODO
