@@ -9,6 +9,7 @@
 
 #ifndef HEXAGON_CONVERSION_HEXAGON_LINALG_TO_LLVM_VTCMTILINGOPTIONS_H
 #define HEXAGON_CONVERSION_HEXAGON_LINALG_TO_LLVM_VTCMTILINGOPTIONS_H
+#include "hexagon/Conversion/LinalgToLLVM/Common.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/IR/Operation.h"
@@ -25,8 +26,11 @@ getVTCMTilingOptions(linalg::LinalgOp op,
                      SmallVector<bool> &fullTensorOperands);
 
 SmallVector<int64_t> getInitialTileSize(linalg::LinalgOp);
+// Returns tile sizes for which the op's memory footprint fits in a VTCM budget
+// of `vtcmBudgetBytes`, or nullopt if even unit tiles do not fit.
 std::optional<SmallVector<int64_t>>
-determineTileSizes(linalg::LinalgOp, SmallVector<int64_t> tilingDims = {});
+determineTileSizes(linalg::LinalgOp, SmallVector<int64_t> tilingDims = {},
+                   int64_t vtcmBudgetBytes = vtcmSizeInBytes);
 } // namespace hexagon
 } // namespace mlir
 

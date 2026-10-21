@@ -22,7 +22,7 @@ namespace hexagon {
 inline constexpr unsigned nativeVectorWidthInBytes = 128;
 inline constexpr unsigned maxElemSizeInByte = 8;
 
-/// The size of the vtcm memory size in bytes.
+/// The default VTCM budget in bytes for the tile size search.
 inline constexpr unsigned vtcmSizeInBytes = 2 * 1024 * 1024; // 2MB
 
 /// Based on op-operands determines the element type size.
