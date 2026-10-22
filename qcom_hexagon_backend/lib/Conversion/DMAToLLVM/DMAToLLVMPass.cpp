@@ -12,8 +12,10 @@
 
 #include "hexagon/Common/Common.h"
 #include "hexagon/Conversion/DMAToLLVM/DMAExternalFnNames.h"
+#include "hexagon/Conversion/DMAToLLVM/DMAToLLVM.h"
 #include "hexagon/Conversion/DMAToLLVM/Passes.h"
 #include "hexagon/Dialect/HexagonMem/IR/HexagonMemDialect.h"
+#include "mlir/Analysis/DataLayoutAnalysis.h"
 #include "mlir/Conversion/LLVMCommon/ConversionTarget.h"
 #include "mlir/Conversion/LLVMCommon/Pattern.h"
 #include "mlir/Dialect/LLVMIR/FunctionCallUtils.h"
@@ -31,7 +33,7 @@ using namespace mlir;
 using namespace hexagon;
 using namespace mlir::hexagonmem;
 
-#define GEN_PASS_CLASSES
+#define GEN_PASS_DEF_DMATOLLVM
 #include "hexagon/Conversion/DMAToLLVM/Passes.h.inc"
 
 namespace {
@@ -62,6 +64,8 @@ static Value truncToI32(ConversionPatternRewriter &rewriter, Location loc,
   // Ensure the value is of an integer type
   assert(llvm::isa<IntegerType>(val.getType()) && "Expected an integer type");
   MLIRContext *context = rewriter.getContext();
+  if (val.getType() == rewriter.getI32Type())
+    return val;
   // Create and return a truncation operation to i32 type
   return rewriter.create<LLVM::TruncOp>(loc, rewriter.getI32Type(), val);
 }
@@ -114,6 +118,8 @@ Value convertToI32Type(mlir::Location loc, Value value,
   // Get the type of the value
   mlir::Type type = value.getType();
   assert(mlir::LLVM::isCompatibleType(type));
+  if (type == rewriter.getI32Type())
+    return value;
   return rewriter.create<LLVM::TruncOp>(loc, rewriter.getI32Type(), value);
 }
 
@@ -152,10 +158,9 @@ LowerDMAStart::matchAndRewrite(memref::DmaStartOp op, OpAdaptor adaptor,
   };
 
   // Get the LLVM pointer to the memory reference
-  auto getMemRefPtr = [this, loc,
-                       context](Value memref, int rank, signed offset,
-                                OpAdaptor adaptor,
-                                ConversionPatternRewriter &rewriter) {
+  auto getMemRefPtr = [this, loc](Value memref, int rank, signed offset,
+                                  OpAdaptor adaptor,
+                                  ConversionPatternRewriter &rewriter) {
     auto memrefType = cast<MemRefType>(memref.getType());
     auto llvmMemref = *(adaptor.getOperands().begin() + offset);
     ValueRange indices = {
@@ -343,12 +348,13 @@ LowerDMAWait::matchAndRewrite(memref::DmaWaitOp op, OpAdaptor adaptor,
 // Setup the Lowering Pass and patterns
 //===----------------------------------------------------------------------===//
 
-void populateDMAToLLVMConversionPatterns(LLVMTypeConverter &converter,
-                                         RewritePatternSet &patterns) {
-  patterns.add<LowerDMAStart, LowerDMAWait>(converter);
+void populateDMAToLLVMConversionPatternsImpl(LLVMTypeConverter &converter,
+                                             RewritePatternSet &patterns) {
+  patterns.addWithLabel<LowerDMAStart, LowerDMAWait>({"hexagon-dma-to-llvm"},
+                                                     converter);
 }
 
-struct DMAToLLVMPass : public DMAToLLVMBase<DMAToLLVMPass> {
+struct DMAToLLVMPass : public ::impl::DMAToLLVMBase<DMAToLLVMPass> {
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
@@ -365,7 +371,7 @@ struct DMAToLLVMPass : public DMAToLLVMBase<DMAToLLVMPass> {
     LLVMTypeConverter typeConverter(context, options);
 
     hexagon::addTypeConversions(context, typeConverter);
-    populateDMAToLLVMConversionPatterns(typeConverter, patterns);
+    hexagon::populateDMAToLLVMConversionPatterns(typeConverter, patterns);
 
     if (failed(applyPartialConversion(moduleOp, target, std::move(patterns))))
       signalPassFailure();
@@ -373,6 +379,11 @@ struct DMAToLLVMPass : public DMAToLLVMBase<DMAToLLVMPass> {
 };
 
 } // namespace
+
+void mlir::hexagon::populateDMAToLLVMConversionPatterns(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns) {
+  populateDMAToLLVMConversionPatternsImpl(converter, patterns);
+}
 
 std::unique_ptr<OperationPass<ModuleOp>> hexagon::createDMAToLLVMPass() {
   return std::make_unique<DMAToLLVMPass>();

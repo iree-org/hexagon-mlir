@@ -15,12 +15,21 @@
 #include "mlir/Pass/Pass.h"
 
 namespace mlir {
+class LLVMTypeConverter;
+class RewritePatternSet;
+
 namespace hexagonmem {
 
 #define GEN_PASS_DECL
 #include "hexagon/Conversion/HexagonMemToLLVM/Passes.h.inc"
 
 std::unique_ptr<OperationPass<ModuleOp>> createHexagonMemToLLVMPass();
+
+/// Populates the HexagonMem-to-LLVM patterns into a caller-owned conversion.
+/// The caller is responsible for configuring the conversion target and type
+/// converter, including Hexagon address-space conversions.
+void populateHexagonMemToLLVMConversionPatterns(LLVMTypeConverter &converter,
+                                                RewritePatternSet &patterns);
 
 void registerConvertHexagonMemToLLVMInterface(DialectRegistry &registry);
 

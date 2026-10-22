@@ -18,7 +18,6 @@
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/TypeSupport.h"
 #include "mlir/IR/Types.h"
-#include "mlir/Interfaces/CopyOpInterface.h"
 #include "mlir/Interfaces/DestinationStyleOpInterface.h"
 
 //===----------------------------------------------------------------------===//

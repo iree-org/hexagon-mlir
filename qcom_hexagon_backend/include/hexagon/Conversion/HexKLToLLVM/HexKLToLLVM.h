@@ -14,12 +14,21 @@
 #include "mlir/Pass/Pass.h"
 
 namespace mlir {
+class LLVMTypeConverter;
+class RewritePatternSet;
+
 namespace hexkl {
 
 #define GEN_PASS_DECL
 #include "hexagon/Conversion/HexKLToLLVM/Passes.h.inc"
 
 std::unique_ptr<OperationPass<ModuleOp>> createHexKLToLLVMPass();
+
+/// Populates the HexKL-to-LLVM patterns into a caller-owned conversion.
+/// The caller is responsible for configuring the conversion target and type
+/// converter, including Hexagon address-space conversions.
+void populateHexKLToLLVMConversionPatterns(LLVMTypeConverter &converter,
+                                           RewritePatternSet &patterns);
 
 void registerConvertHexKLToLLVMInterface(DialectRegistry &registry);
 

@@ -36,6 +36,11 @@ public:
   /// Allocate memory from the VTCM manager
   void *Allocate(size_t nbytes);
 
+  // Fork divergence note
+  /// Like Allocate, but return nullptr instead of aborting if no free block is
+  /// large enough. Lets a caller probe whether a request currently fits.
+  void *TryAllocate(size_t nbytes);
+
   /// Free nbytes from the allocated ptr
   void Free(void *ptr, size_t nbytes);
 

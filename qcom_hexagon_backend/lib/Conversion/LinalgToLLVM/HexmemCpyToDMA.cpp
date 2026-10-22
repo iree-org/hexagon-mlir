@@ -214,9 +214,14 @@ void replaceWithDMA(mlir::hexagonmem::CopyOp copyOp, FunctionOpInterface funcOp,
 
       auto srcStride = rewriter.create<memref::SubViewOp>(loc, source, offsets,
                                                           sizes, strides);
-      int64_t stride, width;
-      assert(isStridedMultiDimMemrefType(sourceMemRefType, stride, width) ||
-             isStridedMultiDimMemrefType(targetMemRefType, stride, width));
+      int64_t stride = 0;
+      int64_t width = 0;
+      bool hasStridedLayout =
+          isStridedMultiDimMemrefType(sourceMemRefType, stride, width) ||
+          isStridedMultiDimMemrefType(targetMemRefType, stride, width);
+      assert(hasStridedLayout);
+      if (!hasStridedLayout)
+        return;
       emitDMA(srcStride, target, zeroIndices, tileIndices, numElementsVal,
               getI32Const(loc, rewriter, stride),
               getI32Const(loc, rewriter, width));
@@ -230,9 +235,14 @@ void replaceWithDMA(mlir::hexagonmem::CopyOp copyOp, FunctionOpInterface funcOp,
 
       auto dstStride = rewriter.create<memref::SubViewOp>(loc, target, offsets,
                                                           sizes, strides);
-      int64_t stride, width;
-      assert(isStridedMultiDimMemrefType(sourceMemRefType, stride, width) ||
-             isStridedMultiDimMemrefType(targetMemRefType, stride, width));
+      int64_t stride = 0;
+      int64_t width = 0;
+      bool hasStridedLayout =
+          isStridedMultiDimMemrefType(sourceMemRefType, stride, width) ||
+          isStridedMultiDimMemrefType(targetMemRefType, stride, width);
+      assert(hasStridedLayout);
+      if (!hasStridedLayout)
+        return;
       emitDMA(source, dstStride, tileIndices, zeroIndices, numElementsVal,
               getI32Const(loc, rewriter, stride),
               getI32Const(loc, rewriter, width));
@@ -252,9 +262,14 @@ void replaceWithDMA(mlir::hexagonmem::CopyOp copyOp, FunctionOpInterface funcOp,
                                           numElements, tagAlloc, zeroIndex);
       rewriter.create<memref::DmaWaitOp>(loc, tagAlloc, tagIndex, numElements);
     } else {
-      int64_t stride, width;
-      assert(isStridedMultiDimMemrefType(sourceMemRefType, stride, width) ||
-             isStridedMultiDimMemrefType(targetMemRefType, stride, width));
+      int64_t stride = 0;
+      int64_t width = 0;
+      bool hasStridedLayout =
+          isStridedMultiDimMemrefType(sourceMemRefType, stride, width) ||
+          isStridedMultiDimMemrefType(targetMemRefType, stride, width);
+      assert(hasStridedLayout);
+      if (!hasStridedLayout)
+        return;
       rewriter.create<memref::DmaStartOp>(
           loc, copyOp.getSource(), zeroIndices, copyOp.getTarget(), zeroIndices,
           numElements, tagAlloc, zeroIndex, getI32Const(loc, rewriter, stride),

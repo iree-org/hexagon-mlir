@@ -49,7 +49,7 @@
 using namespace mlir;
 using namespace mlir::hexagonmem;
 
-#define GEN_PASS_CLASSES
+#define GEN_PASS_DEF_HEXAGONMEMTOLLVM
 #include "hexagon/Conversion/HexagonMemToLLVM/Passes.h.inc"
 
 namespace {
@@ -84,15 +84,15 @@ static Value computeAllocationSize(MemRefType type,
 
   // Compute number of elements.
   Value numElements = rewriter.create<LLVM::ConstantOp>(
-      loc, indexType, rewriter.getIndexAttr(1));
+      loc, indexType, 1);
   for (int pos = 0; pos < type.getRank(); ++pos) {
     auto size = desc.size(rewriter, loc, pos);
     numElements = rewriter.create<LLVM::MulOp>(loc, numElements, size);
   }
   Value totalSize = rewriter.create<LLVM::MulOp>(loc, numElements, sizeInBytes);
-  Value sizeI32 =
-      rewriter.create<LLVM::TruncOp>(loc, rewriter.getI32Type(), totalSize);
-  return sizeI32;
+  if (totalSize.getType() == rewriter.getI32Type())
+    return totalSize;
+  return rewriter.create<LLVM::TruncOp>(loc, rewriter.getI32Type(), totalSize);
 }
 
 /// Runtime call prototype for memref type:
@@ -158,11 +158,10 @@ struct LowerAlloc : public ConvertOpToLLVMPattern<hexagonmem::AllocOp> {
       return success();
     }
 
-    Value alignmentValue;
-    auto alignmentAttr = op.getAlignment();
-    Type indexType = getIndexType();
-    alignmentValue =
-        createIndexAttrConstant(rewriter, loc, indexType, alignmentAttr);
+    // The runtime takes the alignment as a uint64_t, independently of the
+    // target's index bitwidth.
+    Value alignmentValue = createIndexAttrConstant(
+        rewriter, loc, rewriter.getI64Type(), op.getAlignment());
 
     auto allocFnName = getAllocFnName();
     FailureOr<LLVM::LLVMFuncOp> funcOp = getAllocFn(
@@ -186,8 +185,10 @@ struct LowerAlloc : public ConvertOpToLLVMPattern<hexagonmem::AllocOp> {
     this->getMemRefDescriptorSizes(loc, memRefType, adaptor.getOperands(),
                                    rewriter, sizes, strides, size,
                                    /* sizeInBytes */ true);
-    sizeAsI32 =
-        rewriter.create<LLVM::TruncOp>(loc, rewriter.getIntegerType(32), size);
+    sizeAsI32 = size.getType() == rewriter.getI32Type()
+                    ? size
+                    : rewriter.create<LLVM::TruncOp>(
+                          loc, rewriter.getI32Type(), size);
     mlir::LLVM::CallOp callOp = rewriter.create<LLVM::CallOp>(
         loc, funcOp.value(),
         ValueRange({sizeAsI32, alignmentValue, isInVtcmValue}));
@@ -294,8 +295,7 @@ struct LowerCopy : public ConvertOpToLLVMPattern<hexagonmem::CopyOp> {
                          : adaptor.getTarget();
 
     // Now promote the unranked descriptors to the stack.
-    auto one = rewriter.create<LLVM::ConstantOp>(loc, getIndexType(),
-                                                 rewriter.getIndexAttr(1));
+    auto one = rewriter.create<LLVM::ConstantOp>(loc, getIndexType(), 1);
     auto promote = [&](Value desc) {
       auto ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
       auto allocated =
@@ -405,13 +405,14 @@ struct LowerCopy : public ConvertOpToLLVMPattern<hexagonmem::CopyOp> {
 // Setup the Lowering Pass and patterns
 //===----------------------------------------------------------------------===//
 
-void populateHexagonMemToLLVMConversionPatterns(LLVMTypeConverter &converter,
-                                                RewritePatternSet &patterns) {
-  patterns.add<LowerAlloc, LowerDealloc, LowerCopy>(converter);
+void populateHexagonMemToLLVMConversionPatternsImpl(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns) {
+  patterns.addWithLabel<LowerAlloc, LowerDealloc, LowerCopy>(
+      {"hexagon-mem-to-llvm"}, converter);
 }
 
 struct HexagonMemToLLVMPass
-    : public HexagonMemToLLVMBase<HexagonMemToLLVMPass> {
+    : public ::impl::HexagonMemToLLVMBase<HexagonMemToLLVMPass> {
   using Base::Base;
 
   void getDependentDialects(DialectRegistry &registry) const override {
@@ -434,7 +435,8 @@ struct HexagonMemToLLVMPass
     target.addIllegalDialect<HexagonMemDialect>();
 
     hexagon::addTypeConversions(context, typeConverter);
-    populateHexagonMemToLLVMConversionPatterns(typeConverter, patterns);
+    hexagonmem::populateHexagonMemToLLVMConversionPatterns(typeConverter,
+                                                           patterns);
 
     if (failed(applyPartialConversion(moduleOp, target, std::move(patterns))))
       signalPassFailure();
@@ -443,7 +445,10 @@ struct HexagonMemToLLVMPass
 
 /// Implement the interface to convert HexagonMem to LLVM.
 struct HexagonMemToLLVMDialectInterface : public ConvertToLLVMPatternInterface {
-  using ConvertToLLVMPatternInterface::ConvertToLLVMPatternInterface;
+  // The base constructor is now protected; provide an explicit public one that
+  // forwards to it (matches the in-tree pattern, e.g. IndexToLLVM).
+  HexagonMemToLLVMDialectInterface(Dialect *dialect)
+      : ConvertToLLVMPatternInterface(dialect) {}
   void loadDependentDialects(MLIRContext *context) const final {
     context->loadDialect<LLVM::LLVMDialect>();
   }
@@ -454,11 +459,17 @@ struct HexagonMemToLLVMDialectInterface : public ConvertToLLVMPatternInterface {
       ConversionTarget &target, LLVMTypeConverter &typeConverter,
       RewritePatternSet &patterns) const final {
     hexagon::addTypeConversions(getContext(), typeConverter);
-    populateHexagonMemToLLVMConversionPatterns(typeConverter, patterns);
+    hexagonmem::populateHexagonMemToLLVMConversionPatterns(typeConverter,
+                                                           patterns);
   }
 };
 
 } // namespace
+
+void mlir::hexagonmem::populateHexagonMemToLLVMConversionPatterns(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns) {
+  populateHexagonMemToLLVMConversionPatternsImpl(converter, patterns);
+}
 
 void mlir::hexagonmem::registerConvertHexagonMemToLLVMInterface(
     DialectRegistry &registry) {

@@ -13,7 +13,6 @@
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Interfaces/DestinationStyleOpInterface.td"
 include "mlir/IR/CommonTypeConstraints.td"
-include "mlir/Interfaces/CopyOpInterface.td"
 include "hexagon/Dialect/HexagonMem/IR/HexagonMemDialect.td"
 include "hexagon/Dialect/HexagonMem/IR/HexagonMemTypes.td"
 
@@ -57,7 +56,7 @@ def HexagonMem_AllocOp : HexagonMem_Op<"alloc"> {
   let results = (outs Res<AnyMemRefType, "",
                           [MemAlloc<DefaultResource, 0, FullEffect>]>:$buffer);
 
-  let assemblyFormat = "`(`$dynamicSizes`)` attr-dict `:` qualified(type($buffer))";
+  let assemblyFormat = "`(`$dynamicSizes`)` prop-dict attr-dict `:` qualified(type($buffer))";
 
   let hasVerifier = 1;
 }
@@ -66,7 +65,7 @@ def HexagonMem_AllocOp : HexagonMem_Op<"alloc"> {
 // CopyOp
 //===----------------------------------------------------------------------===//
 
-def HexagonMem_CopyOp : HexagonMem_Op<"copy", [CopyOpInterface, SameOperandsElementType,
+def HexagonMem_CopyOp : HexagonMem_Op<"copy", [SameOperandsElementType,
     SameOperandsShape]> {
 
   let description = [{
@@ -156,7 +155,7 @@ def HexagonMem_ConvertLayoutOp : HexagonMem_Op<"convert_layout"> {
 
   let assemblyFormat = [{
     `ins` `(` $source `:` type($source)`)` `,`
-      `outs` `(` $target `:` type($target)`)` attr-dict
+      `outs` `(` $target `:` type($target)`)` prop-dict attr-dict
   }];
 
   // TODO

@@ -158,7 +158,9 @@ struct LowerAttentionOp : public OpRewritePattern<AttentionOp> {
     // Apply mask to scaled QK^T
     Value qkTMasked =
         rewriter
-            .create<linalg::AddOp>(loc, ValueRange{qkTScaled, mask}, qkTempty)
+            .create<linalg::ElementwiseOp>(loc, ValueRange{qkTScaled, mask},
+                                           ValueRange{qkTempty},
+                                           linalg::ElementwiseKind::add)
             .getResult(0);
     DBG("Masked QK^T: " << qkTMasked);
 
@@ -195,8 +197,11 @@ struct LowerAttentionOp : public OpRewritePattern<AttentionOp> {
                   b.create<linalg::YieldOp>(loc, sub);
                 })
             .getResult(0);
-    Value qkTStable =
-        rewriter.create<linalg::ExpOp>(loc, qkTSub, qkTempty).getResult(0);
+    Value qkTStable = rewriter
+                          .create<linalg::ElementwiseOp>(
+                              loc, ValueRange{qkTSub}, ValueRange{qkTempty},
+                              linalg::ElementwiseKind::exp)
+                          .getResult(0);
 
     // Step 3: Compute `sum(exp(xi-max))` along the last dimension
     Value sumInit =

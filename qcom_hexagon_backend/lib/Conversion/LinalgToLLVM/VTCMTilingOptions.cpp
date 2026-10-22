@@ -161,19 +161,19 @@ void setFullTensors(linalg::LinalgOp op, SmallVector<int64_t> tileSizes,
 };
 
 // Calculates the reduction factor as the ratio of the input size in bytes to
-// vctm size (if input size is greater than vtcm size).
+// VTCM budget `vtcmBudgetBytes` (if input size is greater than the budget).
 //
 // TODO: We are updating the reduction factor as a power of 2, so that tile size
 // generation is easier when tensor sizes are also of power of 2. Can explore
 // if this constraint can be relaxed to use the ratio directly.
-int64_t getReductionFactor(int64_t size) {
+int64_t getReductionFactor(int64_t size, int64_t vtcmBudgetBytes) {
 
-  if (size < vtcmSizeInBytes) {
+  if (size < vtcmBudgetBytes) {
     DBG("Input size is smaller than than vtcm size. Hence, setting reduction "
         "factor to 1.");
     return 1;
   }
-  auto ratio = static_cast<double>(size) / vtcmSizeInBytes;
+  auto ratio = static_cast<double>(size) / vtcmBudgetBytes;
 
   // Even when the ratio is marginally greater than power of 2,
   // it would be updated to the next power of 2. Due to this, tile sizes are
@@ -372,7 +372,8 @@ namespace hexagon {
 // - Add support for additional tile size constraints in addition to lower
 // bounds.
 std::optional<SmallVector<int64_t>>
-determineTileSizes(linalg::LinalgOp op, SmallVector<int64_t> tilingDims) {
+determineTileSizes(linalg::LinalgOp op, SmallVector<int64_t> tilingDims,
+                   int64_t vtcmBudgetBytes) {
 
   auto memoryFootprintMap = generateMemoryFootprintAffineMap(op);
   if (!memoryFootprintMap)
@@ -384,16 +385,16 @@ determineTileSizes(linalg::LinalgOp op, SmallVector<int64_t> tilingDims) {
   auto size =
       calcMemoryFootprint(op, getInitialTileSize(op), *memoryFootprintMap);
 
-  if (size <= vtcmSizeInBytes) {
+  if (size <= vtcmBudgetBytes) {
     DBG("-> Memory footprint of op:"
         << size << " bytes, is less than or equal to VTCM Memory size: "
-        << vtcmSizeInBytes
+        << vtcmBudgetBytes
         << " bytes. Hence, tile size estimation for vtcm is not required.");
     return getInitialTileSize(op);
   } else {
     DBG("-> Memory footprint of op:"
         << size
-        << " bytes, is greater than VTCM Memory size: " << vtcmSizeInBytes
+        << " bytes, is greater than VTCM Memory size: " << vtcmBudgetBytes
         << " bytes. Starting, tile size estimation for vtcm.");
   }
 
@@ -408,7 +409,7 @@ determineTileSizes(linalg::LinalgOp op, SmallVector<int64_t> tilingDims) {
   // priority ordering, which would mean that there are duplicates for dims in
   // the ordering list, but with different constraints or scenarios.
   SmallVector<int64_t> tileSizes = getInitialTileSize(op);
-  int64_t reductionFactor = getReductionFactor(size);
+  int64_t reductionFactor = getReductionFactor(size, vtcmBudgetBytes);
   for (int j = 0; j < 2; ++j) {
     for (int i = 0; i < priorityDims.size(); ++i) {
       DBG("-> Current tile size: {" << toString(tileSizes) << "}");
@@ -419,10 +420,10 @@ determineTileSizes(linalg::LinalgOp op, SmallVector<int64_t> tilingDims) {
       tileSizes[idx] = std::max(ratio, lowerBound);
       auto updatedSize =
           calcMemoryFootprint(op, tileSizes, *memoryFootprintMap);
-      if (updatedSize <= vtcmSizeInBytes) {
+      if (updatedSize <= vtcmBudgetBytes) {
         return tileSizes;
       } else {
-        reductionFactor = getReductionFactor(updatedSize);
+        reductionFactor = getReductionFactor(updatedSize, vtcmBudgetBytes);
       }
     }
   }
