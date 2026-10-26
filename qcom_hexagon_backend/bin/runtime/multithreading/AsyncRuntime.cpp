@@ -387,6 +387,13 @@ extern "C" void mlirAsyncRuntimeAwaitAllInGroup(AsyncGroup *group) {
     group->cv.wait(lock, [group] { return group->pendingTokens == 0; });
 }
 
+extern "C" void mlirAsyncRuntimeJoinAllInGroup(AsyncGroup *group) {
+  // The last token of the group is emplaced by a task of the pool, so the
+  // pool wakes this thread to re-check once that task finished.
+  getDefaultAsyncRuntime()->getThreadPool().join(
+      [group] { return group->pendingTokens == 0; });
+}
+
 // Returns a pointer to the storage owned by the async value.
 extern "C" ValueStorage mlirAsyncRuntimeGetValueStorage(AsyncValue *value) {
   assert(!State(value->state).isError() && "unexpected error state");
