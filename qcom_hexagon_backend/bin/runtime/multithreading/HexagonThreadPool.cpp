@@ -38,17 +38,17 @@ void HexagonThreadPool::enqueueTask(std::function<void()> task) {
           allTasksDone.notify_all();
         }
       }
-      // notify all joining threads to re-check their condition after task finish
-      // Taking the lock orders the notification after a joining thread
+      // notify all threads in runTasksUntil() to re-check their condition after task finish
+      // Taking the lock orders the notification after a waiting thread
       // checked done() and before it waits for the next task to finish
       // so the wakeup cannot get lost.
       { std::lock_guard<std::mutex> lock(queueMutex); }
-      joinCondition.notify_all();
+      runTasksUntilCondition.notify_all();
     });
     ++activeTasks;
   }
   condition.notify_one();
-  joinCondition.notify_all();
+  runTasksUntilCondition.notify_all();
 }
 
 void HexagonThreadPool::wait() {
@@ -58,11 +58,11 @@ void HexagonThreadPool::wait() {
 
 size_t HexagonThreadPool::getMaxConcurrency() const { return workers.size(); }
 
-void HexagonThreadPool::join(const std::function<bool()> &done) {
+void HexagonThreadPool::runTasksUntil(const std::function<bool()> &done) {
   std::unique_lock<std::mutex> lock(queueMutex);
   while (!done()) {
     if (tasks.empty()) {
-      joinCondition.wait(lock);
+      runTasksUntilCondition.wait(lock);
       continue;
     }
     std::function<void()> task = std::move(tasks.front());

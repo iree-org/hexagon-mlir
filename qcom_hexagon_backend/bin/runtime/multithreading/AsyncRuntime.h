@@ -128,11 +128,10 @@ mlirAsyncRuntimeAwaitValue(AsyncValue *);
 extern "C" MLIR_ASYNC_RUNTIME_EXPORT void
 mlirAsyncRuntimeAwaitAllInGroup(AsyncGroup *);
 
-// Like mlirAsyncRuntimeAwaitAllInGroup, but the caller joins the thread pool
-// while it waits: it runs queued tasks instead of blocking, and blocks only
-// while there is nothing to run.
+// Like mlirAsyncRuntimeAwaitAllInGroup, but the caller runs queued tasks of the
+// thread pool while it waits, and blocks only while there is nothing to run.
 extern "C" MLIR_ASYNC_RUNTIME_EXPORT void
-mlirAsyncRuntimeJoinAllInGroup(AsyncGroup *);
+mlirAsyncRuntimeAwaitAllInGroupRunningTasks(AsyncGroup *);
 
 // Returns a pointer to the storage owned by the async value.
 extern "C" MLIR_ASYNC_RUNTIME_EXPORT ValueStorage

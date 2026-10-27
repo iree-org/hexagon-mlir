@@ -387,10 +387,10 @@ extern "C" void mlirAsyncRuntimeAwaitAllInGroup(AsyncGroup *group) {
     group->cv.wait(lock, [group] { return group->pendingTokens == 0; });
 }
 
-extern "C" void mlirAsyncRuntimeJoinAllInGroup(AsyncGroup *group) {
+extern "C" void mlirAsyncRuntimeAwaitAllInGroupRunningTasks(AsyncGroup *group) {
   // The last token of the group is emplaced by a task of the pool, so the
   // pool wakes this thread to re-check once that task finished.
-  getDefaultAsyncRuntime()->getThreadPool().join(
+  getDefaultAsyncRuntime()->getThreadPool().runTasksUntil(
       [group] { return group->pendingTokens == 0; });
 }
 

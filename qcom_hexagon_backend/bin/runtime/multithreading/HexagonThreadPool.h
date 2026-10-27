@@ -30,7 +30,7 @@ public:
   // done() before each task and, while the queue is empty, sleeps until a task
   // is enqueued or finishes, then checks again. Hence done() must only become
   // true as an effect of a task of this pool.
-  void join(const std::function<bool()> &done);
+  void runTasksUntil(const std::function<bool()> &done);
 
   template <typename F> void async(F &&f);
 
@@ -40,9 +40,9 @@ private:
 
   std::mutex queueMutex;
   std::condition_variable condition;
-  // Notified whenever a task is enqueued or finishes; joining threads wait on
-  // it.
-  std::condition_variable joinCondition;
+  // Notified whenever a task is enqueued or finishes; threads in
+  // runTasksUntil() wait on it.
+  std::condition_variable runTasksUntilCondition;
   bool stop;
 
   std::atomic<int> activeTasks;
