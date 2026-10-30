@@ -34,6 +34,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/InitLLVM.h"
+#include "llvm/Support/LibraryOptionsContext.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include <cstdlib>
@@ -138,7 +139,9 @@ LogicalResult translateMain(int argc, char **argv, llvm::StringRef toolName) {
 
   registerAsmPrinterCLOptions();
   registerMLIRContextCLOptions();
-  llvm::cl::ParseCommandLineOptions(argc, argv, toolName);
+  llvm::cl::LibraryOptionsContext libraryOptions;
+  llvm::cl::parseCommandLineOptions(
+      libraryOptions, llvm::ArrayRef<const char *>(argv, argc), toolName);
 
   std::unordered_map<std::string, std::string> arch_kwargs = {
       {"arch_triple", targetTriple},
@@ -159,6 +162,7 @@ LogicalResult translateMain(int argc, char **argv, llvm::StringRef toolName) {
   }
 
   llvm::LLVMContext llvmContext;
+  llvmContext.getLibraryOptions().assign(libraryOptions);
   auto llvmIR = translateHexagonMlirLlvmToLLVMIR(
       &llvmContext, *module, arch_kwargs, LLVMOptimizationLevel::O3);
   if (!llvmIR) {

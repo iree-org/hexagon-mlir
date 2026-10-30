@@ -107,6 +107,7 @@ void dumpHexagonAssembly(llvm::Module &module, unsigned moduleId,
   }
 
   llvm::TargetOptions opt;
+  opt.MCOptions.LibraryOptions = &module.getContext().getLibraryOptions();
   std::unique_ptr<llvm::TargetMachine> targetMachine(
       target->createTargetMachine(targetTriple, cpu, features, opt, {}));
 
@@ -186,7 +187,8 @@ runLLVMOptimizer(unsigned optLevel, unsigned sizeLevel,
     llvm::CGSCCAnalysisManager cgam;
     llvm::ModuleAnalysisManager mam;
 
-    llvm::PipelineTuningOptions tuningOptions;
+    llvm::PipelineTuningOptions tuningOptions(
+        &m->getContext().getLibraryOptions());
     tuningOptions.LoopUnrolling = true;
     tuningOptions.LoopInterleaving = true;
     tuningOptions.LoopVectorization = true;
@@ -217,7 +219,8 @@ runLLVMOptimizer(unsigned optLevel, unsigned sizeLevel,
       });
     }
 
-    llvm::PassBuilder pb(targetMachine, tuningOptions, std::nullopt, &pic);
+    llvm::PassBuilder pb(m->getContext(), targetMachine, tuningOptions,
+                         std::nullopt, &pic);
     pb.registerModuleAnalyses(mam);
     pb.registerCGSCCAnalyses(cgam);
     pb.registerFunctionAnalyses(fam);
@@ -278,7 +281,8 @@ std::unique_ptr<llvm::Module> translateHexagonMlirLlvmToLLVMIR(
 }
 
 static std::unique_ptr<llvm::TargetMachine>
-create_target_machine(const llvm::Triple &target_triple) {
+create_target_machine(const llvm::Triple &target_triple,
+                      const llvm::cl::LibraryOptionsContext &library_options) {
 
   // Hexagon target instance is needed to give a broader description of the
   // target platform
@@ -293,7 +297,8 @@ create_target_machine(const llvm::Triple &target_triple) {
 
   // Create the target machine using the target.
   // Provides a detailed configuration for generating optimized machine code.
-  const llvm::TargetOptions &target_options = {};
+  llvm::TargetOptions target_options;
+  target_options.MCOptions.LibraryOptions = &library_options;
   const llvm::Reloc::Model &reloc_model = llvm::Reloc::PIC_;
   const llvm::CodeModel::Model &code_model = llvm::CodeModel::Small;
   const llvm::CodeGenOptLevel &codegen_optlevel =
@@ -378,8 +383,8 @@ llvm_module_to_obj_string(std::unique_ptr<llvm::Module> &llvmModule) {
 
   auto target_triple = llvmModule->getTargetTriple();
 
-  std::unique_ptr<llvm::TargetMachine> targetMachine =
-      create_target_machine(target_triple);
+  std::unique_ptr<llvm::TargetMachine> targetMachine = create_target_machine(
+      target_triple, llvmModule->getContext().getLibraryOptions());
 
   // Set options for debugging
   setupCodegenDumpOptions();
