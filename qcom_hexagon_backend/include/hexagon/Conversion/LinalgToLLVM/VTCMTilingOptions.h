@@ -27,10 +27,14 @@ getVTCMTilingOptions(linalg::LinalgOp op,
                      SmallVector<bool> &fullTensorOperands,
                      int64_t vtcmBudget = 0);
 
-SmallVector<int64_t> getInitialTileSize(linalg::LinalgOp);
+// `loopUpperBounds`, when given, has one entry per loop: a static upper bound
+// for a dynamic loop range, used in place of the default size.
+SmallVector<int64_t> getInitialTileSize(linalg::LinalgOp,
+                                        ArrayRef<int64_t> loopUpperBounds = {});
 std::optional<SmallVector<int64_t>>
 determineTileSizes(linalg::LinalgOp, int64_t vtcmBudget = 0,
-                   SmallVector<int64_t> tilingDims = {});
+                   SmallVector<int64_t> tilingDims = {},
+                   ArrayRef<int64_t> loopUpperBounds = {});
 } // namespace hexagon
 } // namespace mlir
 
