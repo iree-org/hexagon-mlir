@@ -209,8 +209,12 @@ LowerDMAStart::matchAndRewrite(memref::DmaStartOp op, OpAdaptor adaptor,
   // Get the source and destination memory spaces
   auto srcMemSpace = getI32Constant(rewriter, loc, isVTCM(srcMemref) ? 1 : 0);
   auto dstMemSpace = getI32Constant(rewriter, loc, isVTCM(dstMemref) ? 1 : 0);
-  // Set the bypass cache flag to 0
-  auto bypassCache = getI32Constant(rewriter, loc, 0);
+  // Access the source or destination through the cache, unless the op asks to
+  // bypass it with attributes "bypass_src", "bypass_dst".
+  auto bypassSrc =
+      getI32Constant(rewriter, loc, op->hasAttr("bypass_src") ? 1 : 0);
+  auto bypassDst =
+      getI32Constant(rewriter, loc, op->hasAttr("bypass_dst") ? 1 : 0);
   SmallVector<Value, 16> operands;
 
   if (op.isStrided()) {
@@ -254,16 +258,16 @@ LowerDMAStart::matchAndRewrite(memref::DmaStartOp op, OpAdaptor adaptor,
                 height,
                 srcStrideInBytes,
                 dstStrideInBytes,
-                bypassCache,
-                bypassCache,
+                bypassSrc,
+                bypassDst,
                 getI32Constant(rewriter, loc, 0), // isOrdered
                 getI32Constant(rewriter, loc, 0), // Cache Allocation Policy
                 llvmTagPtr};
   } else {
     dmaStartFnName = mlir::hexagon::getDMAStartFnName();
     funcOp = getDMAStartFn(module, dmaStartFnName, rewriter);
-    operands = {llvmSrcPtr,   srcMemSpace, llvmDstPtr,  dstMemSpace,
-                transferSize, bypassCache, bypassCache, llvmTagPtr};
+    operands = {llvmSrcPtr,   srcMemSpace, llvmDstPtr, dstMemSpace,
+                transferSize, bypassSrc,   bypassDst,  llvmTagPtr};
   }
   // Erase the original operation
   rewriter.eraseOp(op);
