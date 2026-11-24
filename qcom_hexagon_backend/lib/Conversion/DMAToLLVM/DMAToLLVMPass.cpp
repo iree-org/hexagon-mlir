@@ -75,12 +75,15 @@ static Value truncToI32(ConversionPatternRewriter &rewriter, Location loc,
 // Lower DMAStart
 //===----------------------------------------------------------------------===//
 
-// Structure to lower DMA start operation to LLVM pattern
-struct LowerDMAStart : public ConvertOpToLLVMPattern<memref::DmaStartOp> {
-  using ConvertOpToLLVMPattern<memref::DmaStartOp>::ConvertOpToLLVMPattern;
+// Structure to lower DMA start operation to LLVM pattern, for
+// memref.dma_start and hexagonmem.dma_start (same operands in the same order).
+template <typename DmaStartOpTy>
+struct LowerDMAStart : public ConvertOpToLLVMPattern<DmaStartOpTy> {
+  using ConvertOpToLLVMPattern<DmaStartOpTy>::ConvertOpToLLVMPattern;
+  using OpAdaptor = typename ConvertOpToLLVMPattern<DmaStartOpTy>::OpAdaptor;
 
   LogicalResult
-  matchAndRewrite(memref::DmaStartOp op, OpAdaptor adaptor,
+  matchAndRewrite(DmaStartOpTy op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override;
 };
 
@@ -135,15 +138,16 @@ static Value AddrSpaceCast(mlir::Location loc, Value inputPtr,
 }
 
 // Function to create DMAStart operation
-LogicalResult
-LowerDMAStart::matchAndRewrite(memref::DmaStartOp op, OpAdaptor adaptor,
-                               ConversionPatternRewriter &rewriter) const {
+template <typename DmaStartOpTy>
+LogicalResult LowerDMAStart<DmaStartOpTy>::matchAndRewrite(
+    DmaStartOpTy op, OpAdaptor adaptor,
+    ConversionPatternRewriter &rewriter) const {
   // Get the context and location of the operation
   auto context = op->getContext();
   auto loc = op->getLoc();
 
   // Get the parent module of the operation
-  auto module = op->getParentOfType<ModuleOp>();
+  auto module = op->template getParentOfType<ModuleOp>();
 
   // Get the name of the DMA start function
   auto dmaStartFnName = mlir::hexagon::getDMA2DStartFnName();
@@ -167,8 +171,8 @@ LowerDMAStart::matchAndRewrite(memref::DmaStartOp op, OpAdaptor adaptor,
     ValueRange indices = {
         std::next(adaptor.getOperands().begin(), offset + 1),
         std::next(adaptor.getOperands().begin(), offset + rank + 1)};
-    auto llvmPtr =
-        getStridedElementPtr(rewriter, loc, memrefType, llvmMemref, indices);
+    auto llvmPtr = this->getStridedElementPtr(rewriter, loc, memrefType,
+                                              llvmMemref, indices);
     return llvmPtr;
   };
 
@@ -209,12 +213,11 @@ LowerDMAStart::matchAndRewrite(memref::DmaStartOp op, OpAdaptor adaptor,
   // Get the source and destination memory spaces
   auto srcMemSpace = getI32Constant(rewriter, loc, isVTCM(srcMemref) ? 1 : 0);
   auto dstMemSpace = getI32Constant(rewriter, loc, isVTCM(dstMemref) ? 1 : 0);
-  // Access the source or destination through the cache, unless the op asks to
-  // bypass it with attributes "bypass_src", "bypass_dst".
-  auto bypassSrc =
-      getI32Constant(rewriter, loc, op->hasAttr("bypass_src") ? 1 : 0);
-  auto bypassDst =
-      getI32Constant(rewriter, loc, op->hasAttr("bypass_dst") ? 1 : 0);
+  // Access the source or destination through the cache, unless a
+  // hexagonmem.dma_start bypasses it.
+  DMABypass bypass = getDMABypass(op.getOperation());
+  auto bypassSrc = getI32Constant(rewriter, loc, bypass.src ? 1 : 0);
+  auto bypassDst = getI32Constant(rewriter, loc, bypass.dst ? 1 : 0);
   SmallVector<Value, 16> operands;
 
   if (op.isStrided()) {
@@ -357,8 +360,9 @@ LowerDMAWait::matchAndRewrite(memref::DmaWaitOp op, OpAdaptor adaptor,
 
 void populateDMAToLLVMConversionPatternsImpl(LLVMTypeConverter &converter,
                                              RewritePatternSet &patterns) {
-  patterns.addWithLabel<LowerDMAStart, LowerDMAWait>({"hexagon-dma-to-llvm"},
-                                                     converter);
+  patterns.addWithLabel<LowerDMAStart<memref::DmaStartOp>,
+                        LowerDMAStart<hexagonmem::DmaStartOp>, LowerDMAWait>(
+      {"hexagon-dma-to-llvm"}, converter);
 }
 
 struct DMAToLLVMPass : public ::impl::DMAToLLVMBase<DMAToLLVMPass> {

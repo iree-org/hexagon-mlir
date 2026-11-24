@@ -13,6 +13,7 @@
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Interfaces/DestinationStyleOpInterface.td"
 include "mlir/IR/CommonTypeConstraints.td"
+include "mlir/Dialect/MemRef/IR/MemoryAccessOpInterfaces.td"
 include "hexagon/Dialect/Crouton/IR/CroutonDialect.td"
 include "hexagon/Dialect/Crouton/IR/CroutonTypes.td"
 include "hexagon/Dialect/HexagonMem/IR/HexagonMemDialect.td"
@@ -101,6 +102,65 @@ def HexagonMem_CopyOp : HexagonMem_Op<"copy", [SameOperandsElementType,
   // TODO
   // let hasCanonicalizer = 1;
   // let hasFolder = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// DmaStartOp
+//===----------------------------------------------------------------------===//
+
+def HexagonMem_DmaStartOp : HexagonMem_Op<"dma_start", [
+    AttrSizedOperandSegments,
+    DeclareOpInterfaceMethods<IndexedMemCopyOpInterface,
+                              ["setMemrefsAndIndices"]>]> {
+  let summary = "non-blocking DMA transfer that may bypass the data cache";
+
+  let description = [{
+    `memref.dma_start` with the same operands in the same order, plus whether
+    the transfer bypasses the data cache on its source and on its destination
+    side. Wait for it with `memref.dma_wait` on the same tag.
+   
+
+    Example:
+
+    ```mlir
+    hexagonmem.dma_start %src[%i], %dst[%j], %n, %tag[%c0]
+        <bypass_src = false, bypass_dst = true>
+        : memref<1024xf32>, memref<256xf32, 1>, memref<1xi32>
+    ```
+  }];
+
+  let arguments = (ins
+      Arg<AnyMemRef, "the memref to copy from", [MemRead]>:$src,
+      Variadic<Index>:$srcIndices,
+      Arg<AnyMemRef, "the memref to copy to", [MemWrite]>:$dst,
+      Variadic<Index>:$dstIndices,
+      Index:$numElements,
+      Arg<AnyMemRef, "the tag to wait on", [MemWrite]>:$tag,
+      Variadic<Index>:$tagIndices,
+      Optional<Index>:$stride,
+      Optional<Index>:$numElementsPerStride,
+      BoolProp:$bypass_src,
+      BoolProp:$bypass_dst);
+
+  let assemblyFormat = [{
+    $src `[` $srcIndices `]` `,` $dst `[` $dstIndices `]` `,` $numElements `,`
+    $tag `[` $tagIndices `]` (`,` $stride^ `,` $numElementsPerStride)?
+    prop-dict attr-dict `:` type($src) `,` type($dst) `,` type($tag)
+  }];
+
+  let extraClassDeclaration = [{
+    // Accessors named like memref::DmaStartOp's, so code can handle both.
+    Value getSrcMemRef() { return getSrc(); }
+    Value getDstMemRef() { return getDst(); }
+    Value getTagMemRef() { return getTag(); }
+    unsigned getSrcMemRefRank() { return getSrc().getType().getRank(); }
+    unsigned getDstMemRefRank() { return getDst().getType().getRank(); }
+    unsigned getTagMemRefRank() { return getTag().getType().getRank(); }
+    bool isStrided() { return getStride() != nullptr; }
+  }];
+
+  let hasFolder = 1;
+  let hasVerifier = 1;
 }
 
 //===----------------------------------------------------------------------===//

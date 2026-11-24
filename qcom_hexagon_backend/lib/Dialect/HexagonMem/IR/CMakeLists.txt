@@ -12,5 +12,6 @@ add_mlir_dialect_library(HexagonMem
   MLIRLinalgDialect
   MLIRLinalgUtils
   MLIRDestinationStyleOpInterface
+  MLIRMemRefDialect
   HexagonCommon
 )

@@ -12,5 +12,6 @@ add_mlir_conversion_library(DMAToLLVM
   MLIRDialectUtils
   MLIRIR
   HexagonCommon
+  HexagonMem
 )
 

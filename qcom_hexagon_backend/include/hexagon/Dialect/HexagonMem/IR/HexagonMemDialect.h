@@ -10,6 +10,7 @@
 #ifndef HEXAGON_DIALECT_HEXAGONMEM_IR_HEXAGONMEM_DIALECT_H
 #define HEXAGON_DIALECT_HEXAGONMEM_IR_HEXAGONMEM_DIALECT_H
 
+#include "mlir/Dialect/MemRef/IR/MemoryAccessOpInterfaces.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
@@ -49,5 +50,17 @@
 //===----------------------------------------------------------------------===//
 #define GET_OP_CLASSES
 #include "hexagon/Dialect/HexagonMem/IR/HexagonMemOps.h.inc"
+
+namespace mlir::hexagonmem {
+
+/// Whether a DMA start bypasses the data cache on its source and destination
+/// side: the flags of a hexagonmem.dma_start, none for a memref.dma_start.
+struct DMABypass {
+  bool src = false;
+  bool dst = false;
+};
+DMABypass getDMABypass(Operation *dmaStart);
+
+} // namespace mlir::hexagonmem
 
 #endif // HEXAGON_DIALECT_HEXAGONMEM_IR_HEXAGONMEM_DIALECT_H

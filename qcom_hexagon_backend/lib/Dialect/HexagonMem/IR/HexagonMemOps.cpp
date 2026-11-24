@@ -18,7 +18,9 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/OperationSupport.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "mlir/Support/LLVM.h"
 
@@ -114,6 +116,48 @@ LogicalResult CroutonToMemrefOp::verify() {
   auto memrefType = llvm::cast<MemRefType>(getResult().getType());
 
   return verifyTypeCompatibility(getOperation(), memrefType, croutonType);
+}
+
+//===----------------------------------------------------------------------===//
+// DmaStartOp
+//===----------------------------------------------------------------------===//
+
+DMABypass mlir::hexagonmem::getDMABypass(Operation *dmaStart) {
+  if (auto dmaOp = dyn_cast<DmaStartOp>(dmaStart))
+    return {dmaOp.getBypassSrc(), dmaOp.getBypassDst()};
+  return {};
+}
+
+LogicalResult DmaStartOp::verify() {
+  if (getSrcIndices().size() != getSrcMemRefRank())
+    return emitOpError("expected as many source indices as the source rank");
+  if (getDstIndices().size() != getDstMemRefRank())
+    return emitOpError(
+        "expected as many destination indices as the destination rank");
+  if (getTagIndices().size() != getTagMemRefRank())
+    return emitOpError("expected as many tag indices as the tag rank");
+  if (static_cast<bool>(getStride()) !=
+      static_cast<bool>(getNumElementsPerStride()))
+    return emitOpError(
+        "expected both or neither of stride and num elements per stride");
+  return success();
+}
+
+LogicalResult DmaStartOp::fold(FoldAdaptor adaptor,
+                               SmallVectorImpl<OpFoldResult> &results) {
+  // dma_start(memref.cast) -> dma_start
+  return memref::foldMemRefCast(*this);
+}
+
+void DmaStartOp::setMemrefsAndIndices(RewriterBase &rewriter, Value newSrc,
+                                      ValueRange newSrcIndices, Value newDst,
+                                      ValueRange newDstIndices) {
+  rewriter.modifyOpInPlace(*this, [&]() {
+    getSrcMutable().assign(newSrc);
+    getSrcIndicesMutable().assign(newSrcIndices);
+    getDstMutable().assign(newDst);
+    getDstIndicesMutable().assign(newDstIndices);
+  });
 }
 
 //===----------------------------------------------------------------------===//
